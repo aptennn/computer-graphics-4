@@ -3,6 +3,7 @@
 
 #include <QPolygonF>
 #include <QTransform>
+#include <QPair>
 #include <QVector>
 #include <QWidget>
 
@@ -28,11 +29,17 @@ private slots:
     void clearScene();
 
 private:
-    enum class Mode { Create, Select };
+    enum class Mode { Create, Select, Intersection, Containment, Side };
 
     int canvasTop() const;
     int polygonAt(const QPointF &point) const;
+    QPair<int, int> edgeAt(const QPointF &point) const;
+    QPair<QPointF, QPointF> activeEdge() const;
     QPointF polygonCenter(const QPolygonF &polygon) const;
+    void setMode(Mode mode);
+    void resetCheckEdge();
+    void clearCheckResult();
+    void handleCheckClick(const QPointF &point);
     void finishCurrentPolygon();
     void selectPolygon(int index);
     void updateActions();
@@ -47,12 +54,30 @@ private:
     bool m_hasCursor = false;
     int m_selected = -1;
     Mode m_mode = Mode::Create;
+    int m_edgePolygon = -1;
+    int m_edgeIndex = -1;
+    bool m_hasSecondStart = false;
+    QPointF m_secondStart;
+    bool m_hasSecondSegment = false;
+    QPointF m_secondEnd;
+    bool m_hasTestPoint = false;
+    QPointF m_testPoint;
+    bool m_hasIntersectionPoint = false;
+    QPointF m_intersectionPoint;
+    bool m_hasOverlap = false;
+    QPointF m_overlapStart;
+    QPointF m_overlapEnd;
 
     QWidget *m_controls = nullptr;
     QPushButton *m_createButton = nullptr;
     QPushButton *m_selectButton = nullptr;
+    QPushButton *m_intersectionButton = nullptr;
+    QPushButton *m_containmentButton = nullptr;
+    QPushButton *m_sideButton = nullptr;
+    QPushButton *m_changeEdgeButton = nullptr;
     QPushButton *m_finishButton = nullptr;
     QLabel *m_selectedLabel = nullptr;
+    QLabel *m_checkResultLabel = nullptr;
     QVector<QPushButton *> m_transformButtons;
     QDoubleSpinBox *m_dx = nullptr;
     QDoubleSpinBox *m_dy = nullptr;

@@ -1,4 +1,5 @@
 #include "polygonwidget.h"
+#include "geometry.h"
 
 #include <QDoubleSpinBox>
 #include <QHBoxLayout>
@@ -37,6 +38,11 @@ double distanceToSegment(const QPointF &point, const QPointF &a, const QPointF &
     return QLineF(point, a + t * edge).length();
 }
 
+QString pointText(const QPointF &point)
+{
+    return QString("(%1; %2)").arg(point.x(), 0, 'f', 1).arg(point.y(), 0, 'f', 1);
+}
+
 } // namespace
 
 // Лилия — создание полигонов и очистка сцены.
@@ -62,29 +68,37 @@ PolygonWidget::PolygonWidget(QWidget *parent)
     auto *modeRow = new QHBoxLayout;
     modeRow->addWidget(new QLabel("Режим:", m_controls));
     m_createButton = new QPushButton("Создание", m_controls);
+    m_createButton->setObjectName("createButton");
     m_selectButton = new QPushButton("Выбор", m_controls);
+    m_selectButton->setObjectName("selectButton");
     m_createButton->setCheckable(true);
     m_selectButton->setCheckable(true);
     m_createButton->setChecked(true);
     modeRow->addWidget(m_createButton);
     modeRow->addWidget(m_selectButton);
     m_finishButton = new QPushButton("Завершить фигуру", m_controls);
+    m_finishButton->setObjectName("finishButton");
     modeRow->addWidget(m_finishButton);
     auto *clearButton = new QPushButton("Очистить сцену (C)", m_controls);
+    clearButton->setObjectName("clearButton");
     modeRow->addWidget(clearButton);
     modeRow->addStretch();
     m_selectedLabel = new QLabel(m_controls);
+    m_selectedLabel->setObjectName("selectedLabel");
     modeRow->addWidget(m_selectedLabel);
     panel->addLayout(modeRow);
 
     auto *translateRow = new QHBoxLayout;
     translateRow->addWidget(new QLabel("Смещение: dx", m_controls));
     m_dx = makeSpinBox(m_controls);
+    m_dx->setObjectName("dxInput");
     translateRow->addWidget(m_dx);
     translateRow->addWidget(new QLabel("dy", m_controls));
     m_dy = makeSpinBox(m_controls);
+    m_dy->setObjectName("dyInput");
     translateRow->addWidget(m_dy);
     auto *translateButton = new QPushButton("Сместить", m_controls);
+    translateButton->setObjectName("translateButton");
     translateRow->addWidget(translateButton);
     translateRow->addStretch();
     panel->addLayout(translateRow);
@@ -92,15 +106,20 @@ PolygonWidget::PolygonWidget(QWidget *parent)
     auto *rotateRow = new QHBoxLayout;
     rotateRow->addWidget(new QLabel("Поворот: угол °", m_controls));
     m_angle = makeSpinBox(m_controls);
+    m_angle->setObjectName("angleInput");
     rotateRow->addWidget(m_angle);
     rotateRow->addWidget(new QLabel("Точка: x", m_controls));
     m_originX = makeSpinBox(m_controls);
+    m_originX->setObjectName("originXInput");
     rotateRow->addWidget(m_originX);
     rotateRow->addWidget(new QLabel("y", m_controls));
     m_originY = makeSpinBox(m_controls);
+    m_originY->setObjectName("originYInput");
     rotateRow->addWidget(m_originY);
     auto *rotateCenterButton = new QPushButton("Вокруг центра", m_controls);
+    rotateCenterButton->setObjectName("rotateCenterButton");
     auto *rotatePointButton = new QPushButton("Вокруг точки", m_controls);
+    rotatePointButton->setObjectName("rotatePointButton");
     rotateRow->addWidget(rotateCenterButton);
     rotateRow->addWidget(rotatePointButton);
     rotateRow->addStretch();
@@ -109,30 +128,53 @@ PolygonWidget::PolygonWidget(QWidget *parent)
     auto *scaleRow = new QHBoxLayout;
     scaleRow->addWidget(new QLabel("Масштаб: sx", m_controls));
     m_scaleX = makeSpinBox(m_controls, 1.0);
+    m_scaleX->setObjectName("scaleXInput");
     scaleRow->addWidget(m_scaleX);
     scaleRow->addWidget(new QLabel("sy", m_controls));
     m_scaleY = makeSpinBox(m_controls, 1.0);
+    m_scaleY->setObjectName("scaleYInput");
     scaleRow->addWidget(m_scaleY);
     auto *scaleCenterButton = new QPushButton("От центра", m_controls);
+    scaleCenterButton->setObjectName("scaleCenterButton");
     auto *scalePointButton = new QPushButton("От точки", m_controls);
+    scalePointButton->setObjectName("scalePointButton");
     scaleRow->addWidget(scaleCenterButton);
     scaleRow->addWidget(scalePointButton);
     scaleRow->addWidget(new QLabel("Точка задаётся в строке поворота", m_controls));
     scaleRow->addStretch();
     panel->addLayout(scaleRow);
 
+    auto *checkRow = new QHBoxLayout;
+    checkRow->addWidget(new QLabel("Проверки:", m_controls));
+    m_intersectionButton = new QPushButton("Пересечение рёбер", m_controls);
+    m_intersectionButton->setObjectName("intersectionButton");
+    m_containmentButton = new QPushButton("Точка в полигоне", m_controls);
+    m_containmentButton->setObjectName("containmentButton");
+    m_sideButton = new QPushButton("Сторона ребра", m_controls);
+    m_sideButton->setObjectName("sideButton");
+    m_changeEdgeButton = new QPushButton("Другое ребро", m_controls);
+    for (QPushButton *button : {m_intersectionButton, m_containmentButton, m_sideButton}) {
+        button->setCheckable(true);
+        checkRow->addWidget(button);
+    }
+    checkRow->addWidget(m_changeEdgeButton);
+    checkRow->addStretch();
+    panel->addLayout(checkRow);
+    m_checkResultLabel = new QLabel(m_controls);
+    m_checkResultLabel->setObjectName("checkResultLabel");
+    m_checkResultLabel->setWordWrap(true);
+    panel->addWidget(m_checkResultLabel);
+
     m_transformButtons = {translateButton, rotateCenterButton, rotatePointButton,
                           scaleCenterButton, scalePointButton};
-    connect(m_createButton, &QPushButton::clicked, this, [this] {
-        m_mode = Mode::Create;
-        updateActions();
-        setFocus();
-    });
-    connect(m_selectButton, &QPushButton::clicked, this, [this] {
-        m_mode = Mode::Select;
-        updateActions();
-        setFocus();
-    });
+    connect(m_createButton, &QPushButton::clicked, this, [this] { setMode(Mode::Create); });
+    connect(m_selectButton, &QPushButton::clicked, this, [this] { setMode(Mode::Select); });
+    connect(m_intersectionButton, &QPushButton::clicked, this,
+            [this] { setMode(Mode::Intersection); });
+    connect(m_containmentButton, &QPushButton::clicked, this,
+            [this] { setMode(Mode::Containment); });
+    connect(m_sideButton, &QPushButton::clicked, this, [this] { setMode(Mode::Side); });
+    connect(m_changeEdgeButton, &QPushButton::clicked, this, &PolygonWidget::resetCheckEdge);
     connect(m_finishButton, &QPushButton::clicked, this, &PolygonWidget::finishCurrentPolygon);
     connect(clearButton, &QPushButton::clicked, this, &PolygonWidget::clearScene);
     connect(translateButton, &QPushButton::clicked, this, &PolygonWidget::translateSelected);
@@ -144,6 +186,7 @@ PolygonWidget::PolygonWidget(QWidget *parent)
     auto *clearShortcut = new QShortcut(QKeySequence(Qt::Key_C), this);
     clearShortcut->setContext(Qt::ApplicationShortcut);
     connect(clearShortcut, &QShortcut::activated, this, &PolygonWidget::clearScene);
+    m_checkResultLabel->setText("Создайте фигуру, затем выберите проверку.");
     updateActions();
     setFocus();
 }
@@ -204,12 +247,37 @@ void PolygonWidget::paintEvent(QPaintEvent *)
             p.drawEllipse(pt, 5.0, 5.0);
     }
 
+    if (m_edgePolygon >= 0) {
+        const auto edge = activeEdge();
+        p.setPen(QPen(QColor(0, 135, 85), 5));
+        p.drawLine(edge.first, edge.second);
+    }
+    if (m_hasSecondStart) {
+        p.setPen(QPen(QColor(145, 50, 185), 2, Qt::DashLine));
+        p.drawLine(m_secondStart, m_cursorPos);
+    }
+    if (m_hasSecondSegment) {
+        p.setPen(QPen(QColor(145, 50, 185), 3));
+        p.drawLine(m_secondStart, m_secondEnd);
+    }
+    if (m_hasOverlap) {
+        p.setPen(QPen(QColor(220, 30, 150), 7));
+        p.drawLine(m_overlapStart, m_overlapEnd);
+    }
+    if (m_hasIntersectionPoint || m_hasTestPoint) {
+        const QPointF point = m_hasIntersectionPoint ? m_intersectionPoint : m_testPoint;
+        p.setPen(QPen(QColor(200, 20, 110), 3));
+        p.setBrush(Qt::white);
+        p.drawEllipse(point, 7.0, 7.0);
+    }
+
     p.setPen(Qt::darkGray);
-    p.drawText(QRect(10, 10, width() - 20, 40),
-               Qt::AlignTop | Qt::AlignLeft,
-               "Создание: ЛКМ — вершина, ПКМ / Enter / двойной клик — завершить.\n"
-               "Выбор: ЛКМ по фигуре. Оранжевая фигура — выбранная. "
-               "Координаты — от угла поля.");
+    if (m_mode == Mode::Create || m_mode == Mode::Select)
+        p.drawText(QRect(10, 10, width() - 20, 40),
+                   Qt::AlignTop | Qt::AlignLeft,
+                   "Создание: ЛКМ — вершина, ПКМ / Enter / двойной клик — завершить.\n"
+                   "Выбор: ЛКМ по фигуре. Оранжевая фигура — выбранная. "
+                   "Координаты — от угла поля.");
 }
 
 void PolygonWidget::mousePressEvent(QMouseEvent *event)
@@ -223,8 +291,10 @@ void PolygonWidget::mousePressEvent(QMouseEvent *event)
             m_cursorPos = canvasPoint;
             m_hasCursor = true;
             updateActions();
-        } else {
+        } else if (m_mode == Mode::Select) {
             selectPolygon(polygonAt(canvasPoint));
+        } else {
+            handleCheckClick(canvasPoint);
         }
         setFocus();
         update();
@@ -237,7 +307,7 @@ void PolygonWidget::mouseMoveEvent(QMouseEvent *event)
 {
     m_cursorPos = QPointF(event->pos().x(), event->pos().y() - canvasTop());
     m_hasCursor = true;
-    if (!m_current.isEmpty() && m_mode == Mode::Create)
+    if ((!m_current.isEmpty() && m_mode == Mode::Create) || m_hasSecondStart)
         update();
 }
 
@@ -287,9 +357,8 @@ void PolygonWidget::clearScene()
     m_polygons.clear();
     m_current.clear();
     m_selected = -1;
-    updateActions();
-    update();
-    setFocus();
+    setMode(Mode::Create);
+    m_checkResultLabel->setText("Сцена очищена. Создайте новую фигуру.");
 }
 
 int PolygonWidget::polygonAt(const QPointF &point) const
@@ -305,6 +374,152 @@ int PolygonWidget::polygonAt(const QPointF &point) const
             && distanceToSegment(point, poly.last(), poly.first()) <= 8.0) return i;
     }
     return -1;
+}
+
+QPair<int, int> PolygonWidget::edgeAt(const QPointF &point) const
+{
+    QPair<int, int> result(-1, -1);
+    double bestDistance = 10.0;
+    for (int i = m_polygons.size() - 1; i >= 0; --i) {
+        const QPolygonF &polygon = m_polygons[i];
+        const int edgeCount = polygon.size() >= 3 ? polygon.size()
+                            : polygon.size() == 2 ? 1 : 0;
+        for (int j = 0; j < edgeCount; ++j) {
+            const double distance = distanceToSegment(point, polygon[j],
+                                                       polygon[(j + 1) % polygon.size()]);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                result = {i, j};
+            }
+        }
+    }
+    return result;
+}
+
+QPair<QPointF, QPointF> PolygonWidget::activeEdge() const
+{
+    const QPolygonF &polygon = m_polygons[m_edgePolygon];
+    return {polygon[m_edgeIndex], polygon[(m_edgeIndex + 1) % polygon.size()]};
+}
+
+void PolygonWidget::clearCheckResult()
+{
+    m_hasSecondStart = false;
+    m_hasSecondSegment = false;
+    m_hasTestPoint = false;
+    m_hasIntersectionPoint = false;
+    m_hasOverlap = false;
+}
+
+void PolygonWidget::setMode(Mode mode)
+{
+    m_mode = mode;
+    m_edgePolygon = -1;
+    m_edgeIndex = -1;
+    clearCheckResult();
+    switch (mode) {
+    case Mode::Create:
+        m_checkResultLabel->setText("ЛКМ добавляет вершины; ПКМ или Enter завершает фигуру.");
+        break;
+    case Mode::Select:
+        m_checkResultLabel->setText("Щёлкните по фигуре, чтобы выбрать её.");
+        break;
+    case Mode::Intersection:
+        m_checkResultLabel->setText("Щёлкните существующее ребро, затем дважды на поле для начала и конца второго отрезка.");
+        break;
+    case Mode::Containment:
+        m_checkResultLabel->setText("Щёлкайте точки для проверки принадлежности выбранному полигону.");
+        break;
+    case Mode::Side:
+        m_checkResultLabel->setText("Щёлкните существующее ребро, затем проверяемые точки. Слева/справа — по направлению ребра.");
+        break;
+    }
+    updateActions();
+    update();
+    setFocus();
+}
+
+void PolygonWidget::resetCheckEdge()
+{
+    m_edgePolygon = -1;
+    m_edgeIndex = -1;
+    clearCheckResult();
+    m_checkResultLabel->setText("Выберите другое существующее ребро щелчком по нему.");
+    updateActions();
+    update();
+    setFocus();
+}
+
+void PolygonWidget::handleCheckClick(const QPointF &point)
+{
+    if (m_mode == Mode::Containment) {
+        if (m_selected < 0 || m_selected >= m_polygons.size()) {
+            m_checkResultLabel->setText("Сначала выберите фигуру в режиме «Выбор».");
+            return;
+        }
+        clearCheckResult();
+        m_hasTestPoint = true;
+        m_testPoint = point;
+        const auto location = Geometry::locatePoint(m_polygons[m_selected], point);
+        const QString answer = location == Geometry::PointLocation::Inside ? "внутри"
+                             : location == Geometry::PointLocation::Boundary ? "на границе"
+                             : "снаружи";
+        m_checkResultLabel->setText(QString("Точка %1: %2 P%3.")
+            .arg(pointText(point), answer).arg(m_selected + 1));
+    } else if (m_mode == Mode::Intersection || m_mode == Mode::Side) {
+        if (m_edgePolygon < 0) {
+            const auto edge = edgeAt(point);
+            if (edge.first < 0) {
+                m_checkResultLabel->setText("Щёлкните ближе к существующему ребру.");
+                return;
+            }
+            m_edgePolygon = edge.first;
+            m_edgeIndex = edge.second;
+            m_checkResultLabel->setText(m_mode == Mode::Intersection
+                ? "Ребро выбрано. Укажите начало второго отрезка."
+                : "Ребро выбрано. Щёлкайте точки для проверки стороны.");
+            updateActions();
+        } else if (m_mode == Mode::Side) {
+            clearCheckResult();
+            m_hasTestPoint = true;
+            m_testPoint = point;
+            const auto edge = activeEdge();
+            const auto side = Geometry::sideOfEdge(edge.first, edge.second, point);
+            const QString answer = side == Geometry::Side::Left ? "слева от"
+                                 : side == Geometry::Side::Right ? "справа от"
+                                 : "на прямой ребра";
+            m_checkResultLabel->setText(QString("Точка %1 %2 ребра P%3. Можно проверить следующую точку.")
+                .arg(pointText(point), answer).arg(m_edgePolygon + 1));
+        } else if (!m_hasSecondStart) {
+            clearCheckResult();
+            m_secondStart = point;
+            m_cursorPos = point;
+            m_hasSecondStart = true;
+            m_checkResultLabel->setText("Укажите конец второго отрезка; его предварительное положение следует за мышью.");
+        } else {
+            m_hasSecondStart = false;
+            m_secondEnd = point;
+            m_hasSecondSegment = true;
+            const auto edge = activeEdge();
+            const auto result = Geometry::intersectSegments(edge.first, edge.second,
+                                                             m_secondStart, m_secondEnd);
+            if (result.kind == Geometry::IntersectionKind::Point) {
+                m_hasIntersectionPoint = true;
+                m_intersectionPoint = result.first;
+                m_checkResultLabel->setText(QString("Пересечение в точке %1. Укажите начало следующего отрезка.")
+                    .arg(pointText(result.first)));
+            } else if (result.kind == Geometry::IntersectionKind::Overlap) {
+                m_hasOverlap = true;
+                m_overlapStart = result.first;
+                m_overlapEnd = result.last;
+                m_checkResultLabel->setText(QString("Рёбра перекрываются от %1 до %2. Можно повторить проверку.")
+                    .arg(pointText(result.first), pointText(result.last)));
+            } else {
+                m_checkResultLabel->setText("Рёбра не пересекаются. Укажите начало следующего отрезка.");
+            }
+        }
+    }
+    update();
 }
 
 QPointF PolygonWidget::polygonCenter(const QPolygonF &polygon) const
@@ -340,6 +555,10 @@ void PolygonWidget::updateActions()
 {
     m_createButton->setChecked(m_mode == Mode::Create);
     m_selectButton->setChecked(m_mode == Mode::Select);
+    m_intersectionButton->setChecked(m_mode == Mode::Intersection);
+    m_containmentButton->setChecked(m_mode == Mode::Containment);
+    m_sideButton->setChecked(m_mode == Mode::Side);
+    m_changeEdgeButton->setEnabled(m_edgePolygon >= 0);
     m_finishButton->setEnabled(!m_current.isEmpty());
     const bool hasSelection = m_selected >= 0 && m_selected < m_polygons.size();
     for (QPushButton *button : m_transformButtons) button->setEnabled(hasSelection);
@@ -352,6 +571,9 @@ void PolygonWidget::applyTransform(const QTransform &transform)
 {
     if (m_selected < 0 || m_selected >= m_polygons.size()) return;
     m_polygons[m_selected] = transform.map(m_polygons[m_selected]);
+    clearCheckResult();
+    if (m_mode == Mode::Intersection || m_mode == Mode::Containment || m_mode == Mode::Side)
+        m_checkResultLabel->setText("Фигура изменена. Повторите проверку.");
     update();
 }
 
