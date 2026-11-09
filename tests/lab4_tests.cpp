@@ -36,6 +36,11 @@ void Lab4Tests::segmentIntersection()
 
     QVERIFY(intersectSegments({0, 0}, {10, 0}, {0, 1}, {10, 1}).kind
             == IntersectionKind::None);
+    // Прямые пересекаются, но точки пересечения нет на одном из отрезков.
+    QVERIFY(intersectSegments({0, 0}, {10, 0}, {15, -5}, {15, 5}).kind
+            == IntersectionKind::None);
+    QVERIFY(intersectSegments({0, 0}, {10, 0}, {5, 2}, {5, 5}).kind
+            == IntersectionKind::None);
     QVERIFY(intersectSegments({2, 2}, {2, 2}, {0, 2}, {5, 2}).kind
             == IntersectionKind::Point);
 }
@@ -139,6 +144,12 @@ void Lab4Tests::existingSceneAndTransforms()
     QVERIFY(result->text().contains("внутри"));
     clickCanvas(250, 120);
     QVERIFY(result->text().contains("снаружи"));
+
+    spin("scaleXInput")->setValue(0);
+    QTest::mouseClick(button("scalePointButton"), Qt::LeftButton);
+    QVERIFY(result->text().contains("ненулевыми"));
+    clickCanvas(240, 120);
+    QVERIFY(result->text().contains("внутри"));
 
     QTest::mouseClick(button("clearButton"), Qt::LeftButton);
     clickCanvas(350, 200);
