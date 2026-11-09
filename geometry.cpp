@@ -56,11 +56,17 @@ Intersection intersectSegments(const QPointF &a, const QPointF &b,
     if (nearZero(ss))
         return onSegment(c, a, b) ? Intersection{IntersectionKind::Point, c, c} : Intersection{};
 
-    const QPointF difference = c - a;
-    const double denominator = cross(r, s);
+    // Как в лекции: P(t) = a + t(b - a), n перпендикулярен (d - c),
+    // n · (P(t) - c) = 0, откуда t = -n · (a - c) / n · (b - a).
+    const QPointF normal(-s.y(), s.x());
+    const QPointF fromSecondStart = a - c;
+    const double denominator = dot(normal, r);
     if (nearZero(denominator, std::sqrt(rr * ss))) {
-        if (!nearZero(cross(difference, r), std::sqrt(squaredLength(difference) * rr)))
+        if (!nearZero(dot(normal, fromSecondStart),
+                      std::sqrt(squaredLength(fromSecondStart) * ss)))
             return {};
+        // Совпадающие прямые: находим общую часть конечных отрезков.
+        const QPointF difference = c - a;
         const double t0 = dot(difference, r) / rr;
         const double t1 = dot(d - a, r) / rr;
         const double begin = std::max(0.0, std::min(t0, t1));
@@ -74,11 +80,14 @@ Intersection intersectSegments(const QPointF &a, const QPointF &b,
         return {IntersectionKind::Overlap, first, last};
     }
 
-    const double t = cross(difference, s) / denominator;
-    const double u = cross(difference, r) / denominator;
-    if (t < -epsilon || t > 1.0 + epsilon || u < -epsilon || u > 1.0 + epsilon)
+    const double t = -dot(normal, fromSecondStart) / denominator;
+    if (t < -epsilon || t > 1.0 + epsilon)
         return {};
     const QPointF point = a + std::clamp(t, 0.0, 1.0) * r;
+    // Лекция находит пересечение прямых; для рёбер проверяем и второй отрезок.
+    const double u = dot(point - c, s) / ss;
+    if (u < -epsilon || u > 1.0 + epsilon)
+        return {};
     return {IntersectionKind::Point, point, point};
 }
 

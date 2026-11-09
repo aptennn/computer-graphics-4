@@ -35,6 +35,7 @@ private:
     int polygonAt(const QPointF &point) const;
     QPair<int, int> edgeAt(const QPointF &point) const;
     QPair<QPointF, QPointF> activeEdge() const;
+    // Центр фигуры для поворота и масштабирования.
     QPointF polygonCenter(const QPolygonF &polygon) const;
     void setMode(Mode mode);
     void resetCheckEdge();
@@ -43,6 +44,7 @@ private:
     void finishCurrentPolygon();
     void selectPolygon(int index);
     void updateActions();
+    // Часть 2: матричные преобразования выбранной фигуры.
     void applyTransform(const QTransform &transform);
     void translateSelected();
     void rotateSelected(bool aroundCenter);
@@ -78,6 +80,7 @@ private:
     QPushButton *m_finishButton = nullptr;
     QLabel *m_selectedLabel = nullptr;
     QLabel *m_checkResultLabel = nullptr;
+    // Поля ввода и кнопки для смещения, поворота и масштабирования.
     QVector<QPushButton *> m_transformButtons;
     QDoubleSpinBox *m_dx = nullptr;
     QDoubleSpinBox *m_dy = nullptr;

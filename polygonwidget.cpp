@@ -88,6 +88,8 @@ PolygonWidget::PolygonWidget(QWidget *parent)
     modeRow->addWidget(m_selectedLabel);
     panel->addLayout(modeRow);
 
+    // Часть 2: пользователь задаёт параметры аффинных преобразований.
+    // Координаты точки отсчитываются от верхнего левого угла поля рисования.
     auto *translateRow = new QHBoxLayout;
     translateRow->addWidget(new QLabel("Смещение: dx", m_controls));
     m_dx = makeSpinBox(m_controls);
@@ -129,10 +131,12 @@ PolygonWidget::PolygonWidget(QWidget *parent)
     scaleRow->addWidget(new QLabel("Масштаб: sx", m_controls));
     m_scaleX = makeSpinBox(m_controls, 1.0);
     m_scaleX->setObjectName("scaleXInput");
+    m_scaleX->setToolTip("По лекции коэффициент масштаба должен быть ненулевым");
     scaleRow->addWidget(m_scaleX);
     scaleRow->addWidget(new QLabel("sy", m_controls));
     m_scaleY = makeSpinBox(m_controls, 1.0);
     m_scaleY->setObjectName("scaleYInput");
+    m_scaleY->setToolTip("По лекции коэффициент масштаба должен быть ненулевым");
     scaleRow->addWidget(m_scaleY);
     auto *scaleCenterButton = new QPushButton("От центра", m_controls);
     scaleCenterButton->setObjectName("scaleCenterButton");
@@ -165,6 +169,7 @@ PolygonWidget::PolygonWidget(QWidget *parent)
     m_checkResultLabel->setWordWrap(true);
     panel->addWidget(m_checkResultLabel);
 
+    // Все пять кнопок работают только после выбора фигуры.
     m_transformButtons = {translateButton, rotateCenterButton, rotatePointButton,
                           scaleCenterButton, scalePointButton};
     connect(m_createButton, &QPushButton::clicked, this, [this] { setMode(Mode::Create); });
@@ -524,8 +529,11 @@ void PolygonWidget::handleCheckClick(const QPointF &point)
 
 QPointF PolygonWidget::polygonCenter(const QPolygonF &polygon) const
 {
+    // Для точки центр совпадает с ней, для ребра это середина отрезка.
     if (polygon.size() == 1) return polygon.first();
     if (polygon.size() == 2) return (polygon[0] + polygon[1]) / 2.0;
+
+    // Для многоугольника вычисляем центроид по ориентированным площадям треугольников.
     double twiceArea = 0.0;
     double centerX = 0.0;
     double centerY = 0.0;
@@ -539,6 +547,7 @@ QPointF PolygonWidget::polygonCenter(const QPolygonF &polygon) const
     }
     if (std::abs(twiceArea) > 1e-9)
         return QPointF(centerX / (3.0 * twiceArea), centerY / (3.0 * twiceArea));
+    // Если площадь нулевая (все вершины на одной прямой), берём среднее вершин.
     QPointF average;
     for (const QPointF &point : polygon) average += point;
     return average / polygon.size();
@@ -570,6 +579,7 @@ void PolygonWidget::updateActions()
 void PolygonWidget::applyTransform(const QTransform &transform)
 {
     if (m_selected < 0 || m_selected >= m_polygons.size()) return;
+    // Одна матрица применяется к каждой вершине выбранной фигуры.
     m_polygons[m_selected] = transform.map(m_polygons[m_selected]);
     clearCheckResult();
     if (m_mode == Mode::Intersection || m_mode == Mode::Containment || m_mode == Mode::Side)
@@ -579,6 +589,8 @@ void PolygonWidget::applyTransform(const QTransform &transform)
 
 void PolygonWidget::translateSelected()
 {
+    // Как в лекции: (x, y, 1) * [1 0 0; 0 1 0; dx dy 1].
+    // QTransform задаётся шестью числами: m11, m12, m21, m22, dx, dy.
     applyTransform(QTransform(1, 0, 0, 1, m_dx->value(), m_dy->value()));
 }
 
@@ -591,7 +603,10 @@ void PolygonWidget::rotateSelected(bool aroundCenter)
     const double radians = m_angle->value() * std::acos(-1.0) / 180.0;
     const double c = std::cos(radians);
     const double s = std::sin(radians);
-    // T(center) * R(angle) * T(-center).
+    // Как в лекции для вектора-строки: T(-center) * R(angle) * T(center).
+    // Сначала переносим центр в (0, 0),
+    // поворачиваем и переносим обратно. В экранных координатах +угол — по часовой стрелке.
+    // QTransform(c, s, -s, c, dx, dy) даёт x' = c*x - s*y + dx, y' = s*x + c*y + dy.
     applyTransform(QTransform(c, s, -s, c,
                               center.x() * (1.0 - c) + center.y() * s,
                               center.y() * (1.0 - c) - center.x() * s));
@@ -605,7 +620,14 @@ void PolygonWidget::scaleSelected(bool aroundCenter)
         : QPointF(m_originX->value(), m_originY->value());
     const double sx = m_scaleX->value();
     const double sy = m_scaleY->value();
-    // T(center) * S(sx, sy) * T(-center).
+    // По определению из лекции определитель sx*sy должен быть ненулевым.
+    if (qFuzzyIsNull(sx) || qFuzzyIsNull(sy)) {
+        m_checkResultLabel->setText("Масштабирование невозможно: sx и sy должны быть ненулевыми.");
+        return;
+    }
+    // Как в лекции для вектора-строки: T(-center) * S(sx, sy) * T(center).
+    // Выбранная точка остаётся неподвижной.
+    // x' = center.x + sx*(x - center.x), y' = center.y + sy*(y - center.y).
     applyTransform(QTransform(sx, 0, 0, sy,
                               center.x() * (1.0 - sx), center.y() * (1.0 - sy)));
 }
